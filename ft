@@ -1,0 +1,107 @@
+#!/bin/fish
+
+set FISHTRACKTED_FILE $HOME/.fishtrackted
+
+function init_file
+    if test ! -e $FISHTRACKTED_FILE
+	echo Creating $FISHTRACKTED_FILE for your stacks!
+	touch $FISHTRACKTED_FILE
+	echo "\
+(*) == main == {
+}" >> $FISHTRACKTED_FILE	
+    end	
+end
+
+function fishtrack_things
+    set subcmd $argv[1]
+    set text_or_tgt $argv[2]
+    init_file
+
+    # TODO: Add docstrs here somehow and do the weird sed awk thing to parse into usage
+    switch $subcmd
+    case 'all'	
+	/bin/cat $FISHTRACKTED_FILE
+    case 'cat'	
+	sed -n "/(*)/,/}/ p" $FISHTRACKTED_FILE
+    case 'edit'	
+	$EDITOR $FISHTRACKTED_FILE
+    case 'head'	'' # handles both head and "./ft" case
+	# TODO: Can we use awk?
+	# select lines that start with (*), then find $<num> corresponding
+	# to the name of the stack. Then print the line after (?)
+	awk '/^\(\*\)/ { name=$3} /^-/ && name { print name" "$0; exit}' $FISHTRACKTED_FILE
+    case 'heads'	
+	awk 'BEGIN {print "heads of all stacks:\n---"; head_idx=-1; stack=""} 
+	    /==/ {head_idx=(NR+1); if ($1=="(*)") {stack=$3} else {stack=$2}}
+	    NR==head_idx {if ($1=="}") {print stack, "- no head"} else {print stack, $0}}' $FISHTRACKTED_FILE
+    case 'help'	
+	usage
+    case 'ls'	
+	awk 'BEGIN {print "stacks:\n---"; N=1}
+	    /==/ {if ($1=="(*)") {print N": "$3} else {print N": "$2} N++}' $FISHTRACKTED_FILE
+    case 'pop'	
+	# find curr stack, then remove below line if starts with -
+	sed -in '/(*)/, /-/ { /-/ d }' $FISHTRACKTED_FILE
+    case 'push'	
+	# find curr stack, add line below
+	sed -in "/(*)/ a\- $text_or_tgt" $FISHTRACKTED_FILE
+    case 'rm'
+	if test $text_or_tgt = "main"
+	    echo "You can't delete the main stack!"
+	else
+	    # either u are removing the non-current stack
+	    # or u are removing the current stack
+	    if grep -qxc "(\*) == $text_or_tgt == {" $FISHTRACKTED_FILE
+		# default add "curr" to main
+		sed -in 's/== main == {/(\*) == main == {/' $FISHTRACKTED_FILE
+		sed -in "/== $text_or_tgt == {/,/}/ d" $FISHTRACKTED_FILE
+	    else if grep -qxc "== $text_or_tgt == {" $FISHTRACKTED_FILE
+		sed -in "/== $text_or_tgt == {/,/}/ d" $FISHTRACKTED_FILE
+	    end
+	end
+    case 'switch'	
+	# if stack to swap to exists, then
+	# remove (*) from curr stack, and prepend to new curr
+	# else, report err
+	if grep -qxc "(\*) == $text_or_tgt == {" $FISHTRACKTED_FILE
+	    echo "$text_or_tgt is already selected!"
+	else if grep -qxc "== $text_or_tgt == {" $FISHTRACKTED_FILE
+	    sed -in 's/(\*) == /== /' $FISHTRACKTED_FILE
+	    sed -in "s/== $text_or_tgt ==/(*) == $text_or_tgt ==/" $FISHTRACKTED_FILE
+	else
+	    # delete "curr stack" notation, add new curr stack
+	    sed -in 's/(\*) == /== /' $FISHTRACKTED_FILE
+	    echo "\
+(*) == $text_or_tgt == {
+}" >> $FISHTRACKTED_FILE	
+	end
+    case '*'
+	# $subcmd is not a supported command!
+	return 1
+    end
+
+    return 0
+end
+
+function usage
+    echo --- Fishtrackted ---
+    echo
+    echo "all:    display erythang"
+    echo "cat:    display contents of current stack"
+    echo "edit:   open all stacks in editor for bulk mod"
+    echo "head:   display top of current stack"
+    echo "heads:  display tops of all stacks"
+    echo "help:   print this message"
+    echo "ls:     list all stacks"
+    echo "pop:    remove top of stack"
+    echo "push:   add to top of stack"
+    echo "rm:     remove a given stack"
+    echo "switch: switch to diff stack, or create if doesn't exist"
+end
+
+# where the fishtracking begins
+fishtrack_things $argv
+
+if test $status -ne 0
+    usage
+end
