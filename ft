@@ -14,7 +14,7 @@ end
 
 function fishtrack_things
     set subcmd $argv[1]
-    set text_or_tgt $argv[2]
+    set text_or_tgt (string join ' ' $argv[2..])
     init_file
 
     # TODO: Add docstrs here somehow and do the weird sed awk thing to parse into usage
@@ -29,11 +29,13 @@ function fishtrack_things
 	# TODO: Can we use awk?
 	# select lines that start with (*), then find $<num> corresponding
 	# to the name of the stack. Then print the line after (?)
-	awk '/^\(\*\)/ { name=$3} /^-/ && name { print name" "$0; exit}' $FISHTRACKTED_FILE
+	awk '/^\(\*\)/ { name=$3 } 
+	    /^-/ && name { print name" "$0; exit }
+	    /^}/ && name { print name" - (empty)"; exit }' $FISHTRACKTED_FILE
     case 'heads'	
 	awk 'BEGIN {print "heads of all stacks:\n---"; head_idx=-1; stack=""} 
 	    /==/ {head_idx=(NR+1); if ($1=="(*)") {stack=$3} else {stack=$2}}
-	    NR==head_idx {if ($1=="}") {print stack, "- no head"} else {print stack, $0}}' $FISHTRACKTED_FILE
+	    NR==head_idx {if ($1=="}") {print stack, "- (empty)"} else {print stack, $0}}' $FISHTRACKTED_FILE
     case 'help'	
 	usage
     case 'ls'	
@@ -71,6 +73,7 @@ function fishtrack_things
 	else
 	    # delete "curr stack" notation, add new curr stack
 	    sed -in 's/(\*) == /== /' $FISHTRACKTED_FILE
+	    echo "Creating stack '$text_or_tgt'"
 	    echo "\
 (*) == $text_or_tgt == {
 }" >> $FISHTRACKTED_FILE	
@@ -85,6 +88,7 @@ end
 
 function usage
     echo --- Fishtrackted ---
+    echo usage: ./ft [subcmd]
     echo
     echo "all:    display erythang"
     echo "cat:    display contents of current stack"
